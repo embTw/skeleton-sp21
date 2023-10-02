@@ -94,6 +94,33 @@ public class Model extends Observable {
         setChanged();
     }
 
+    /**
+     *
+     * @param col   col of the current tile
+     * @param row   row of the current tile
+     * @return the row of the result tile
+     */
+    private int getFirstSameOrLastNull(int col, int row, int[] merged) {
+        assert 0 <= col && col < board.size();
+        assert 0 <= row && row < board.size();
+        int lastTile = row;
+
+        for (int i = row + 1; i < board.size(); i++) {
+            if (board.tile(col, i) == null) {
+                lastTile = i;
+            } else {
+                if (board.tile(col, i).value() == board.tile(col, row).value()
+                    && merged[i] == 0) {
+                    merged[i] = 1;
+                    return i;
+                }
+                break;
+            }
+        }
+
+        return lastTile;
+    }
+
     /** Tilt the board toward SIDE. Return true iff this changes the board.
      *
      * 1. If two Tile objects are adjacent in the direction of motion and have
@@ -113,6 +140,28 @@ public class Model extends Observable {
         // TODO: Modify this.board (and perhaps this.score) to account
         // for the tilt to the Side SIDE. If the board changed, set the
         // changed local variable to true.
+
+        // convert to new view
+        board.setViewingPerspective(side);
+
+        for (int j = 0; j < board.size(); j++) {
+            int[] merged = new int[board.size()];
+            for (int i = board.size()-1; i >= 0; i--) {
+                if (board.tile(j, i) != null) {
+                    // 向上查找最后一个空块或者第一个与自身值相同的块
+                    int dstRow = getFirstSameOrLastNull(j, i, merged);
+                    if (dstRow != i) {
+                        if (board.move(j, dstRow, board.tile(j, i))) {
+                            score += board.tile(j, dstRow).value();
+                        }
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        // back to origin view
+        board.setViewingPerspective(Side.NORTH);
 
         checkGameOver();
         if (changed) {
@@ -167,6 +216,24 @@ public class Model extends Observable {
         return false;
     }
 
+
+    public static boolean hasSameNeighbor(Board b, int col, int row) {
+        if (b == null || b.tile(col, row) == null)
+            return false;
+        int[] dx = {1, -1, 0, 0};
+        int[] dy = {0, 0, -1, 1};
+        for (int i = 0; i < 4; i++) {
+            int x = row + dx[i];
+            int y = col + dy[i];
+            if (0 <= x && x < b.size() && 0 <= y && y < b.size()) {
+                if (b.tile(x, y) != null && b.tile(x, y).value() == b.tile(col, row).value()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * Returns true if there are any valid moves on the board.
      * There are two ways that there can be valid moves:
@@ -177,24 +244,17 @@ public class Model extends Observable {
         // TODO: Fill in this function.
         if (b == null)
             return false;
-        int len = b.size();
-        for (int i = 0; i < len - 1; i++) {
-            for (int j = 0; j < len - 1; j++) {
-                // empty
-                if (b.tile(i, j) == null)
+
+        for (int i = 0; i < b.size(); i++) {
+            for (int j = 0; j < b.size(); j++) {
+                if (b.tile(j, i) == null) {
                     return true;
-                // same
-                if (b.tile(i, j).value() == b.tile(i+1, j).value())
+                } else if (hasSameNeighbor(b, j, i)) {
                     return true;
-                if (b.tile(i, j).value() == b.tile(i, j+1).value())
-                    return true;
+                }
             }
         }
-        int i = len - 1;
-        if (b.tile(i, i).value() == b.tile(i-1,i).value())
-            return true;
-        if (b.tile(i, i).value() == b.tile(i,i-1).value())
-            return true;
+
         return false;
     }
 
